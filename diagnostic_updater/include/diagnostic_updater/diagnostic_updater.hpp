@@ -359,11 +359,13 @@ public:
    *
    * \param node Node pointer to set up diagnostics
    * \param period Value in seconds to set the update period
+   * \param starting_up_status Diagnostic status to send as first message
    * \note The given period value not being used if the `diagnostic_updater.period`
    * ros2 parameter was set previously.
    */
   template<class NodeT>
-  explicit Updater(NodeT node, double period = 1.0)
+  explicit Updater(NodeT node, double period = 1.0,
+    int starting_up_status = diagnostic_msgs::msg::DiagnosticStatus::OK)
   : Updater(
       node->get_node_base_interface(),
       node->get_node_clock_interface(),
@@ -371,7 +373,8 @@ public:
       node->get_node_parameters_interface(),
       node->get_node_timers_interface(),
       node->get_node_topics_interface(),
-      period)
+      period,
+      starting_up_status)
   {}
 
   Updater(
@@ -381,7 +384,8 @@ public:
     std::shared_ptr<rclcpp::node_interfaces::NodeParametersInterface> parameters_interface,
     std::shared_ptr<rclcpp::node_interfaces::NodeTimersInterface> timers_interface,
     std::shared_ptr<rclcpp::node_interfaces::NodeTopicsInterface> topics_interface,
-    double period = 1.0)
+    double period = 1.0,
+    int starting_up_status = diagnostic_msgs::msg::DiagnosticStatus::OK)
   : verbose_(false),
     base_interface_(base_interface),
     timers_interface_(timers_interface),
@@ -391,6 +395,7 @@ public:
       rclcpp::create_publisher<diagnostic_msgs::msg::DiagnosticArray>(
         topics_interface, "/diagnostics", 1)),
     logger_(logging_interface->get_logger()),
+    starting_up_status_(starting_up_status),
     node_name_(base_interface->get_name()),
     warn_nohwid_done_(false)
   {
@@ -604,9 +609,13 @@ private:
    */
   virtual void addedTaskCallback(DiagnosticTaskInternal & task)
   {
+    if (starting_up_status_ < 0) {
+      return;
+    }
+
     DiagnosticStatusWrapper stat;
     stat.name = task.getName();
-    stat.summary(0, "Node starting up");
+    stat.summary(starting_up_status_, "Node starting up");
     publish(stat);
   }
 
@@ -618,6 +627,7 @@ private:
   rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr publisher_;
   rclcpp::Logger logger_;
 
+  int starting_up_status_;
   std::string hwid_;
   std::string node_name_;
   bool warn_nohwid_done_;
